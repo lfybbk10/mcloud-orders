@@ -1,0 +1,105 @@
+plugins {
+    // Apply the application plugin to add support for building a CLI application in Java.
+    id 'application'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'java'
+    id 'org.openapi.generator' version '7.21.0'
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+}
+
+ext{
+    openApiGeneratorVersion = '7.1.0'
+    springdocVersion = '2.4.0'
+    mapstructVersion = '1.6.3'
+    lombokVersion = '1.18.40'
+    lombokMapstructBindingVersion = '0.2.0'
+}
+
+dependencies {
+    // Use JUnit test framework.
+    testImplementation libs.junit
+
+    // This dependency is used by the application.
+    implementation libs.guava
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    implementation 'org.postgresql:postgresql'
+    implementation 'org.liquibase:liquibase-core'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+
+    // OpenAPI
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-api:2.4.0"
+
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    testRuntimeOnly 'com.h2database:h2:2.3.232'
+}
+
+// Apply a specific Java toolchain to ease working on different environments.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'ru.mentee.power.orders.McloudOrdersApplication'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+def openApiSpec = file("src/main/resources/api/api-spec.yml")
+
+openApiGenerate {
+    generatorName = "spring"
+    inputSpec = "file:///${openApiSpec.absolutePath.replace('\\', '/')}"
+    outputDir = "${buildDir}/generated"
+    apiPackage = "ru.mentee.power.orders.api"
+    modelPackage = "ru.mentee.power.orders.model"
+    configOptions = [
+            interfaceOnly: "true",
+            useTags: "true",
+            dateLibrary: "java8",
+            useSpringBoot3: "true",
+            useJakartaEe: "true",
+            openApiNullable: "false",
+            documentationProvider: "none"
+    ]
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "${buildDir}/generated/src/main/java"
+        }
+    }
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('openApiGenerate')
+}

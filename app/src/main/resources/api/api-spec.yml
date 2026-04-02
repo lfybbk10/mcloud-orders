@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: mcloud-orders Order API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/orders:
+    post:
+      summary: Создать заказ и отправить событие в Kafka
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+      responses:
+        '202':
+          description: Заказ принят и событие отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /api/v1/orders/{orderId}:
+    get:
+      summary: Получить состояние заказа
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущий статус заказа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          description: Заказ не найден
+components:
+  schemas:
+    OrderRequest:
+      type: object
+      required: [customerId, amount, lines]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+    OrderLine:
+      type: object
+      required: [productId, quantity, price, priority]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        price:
+          type: number
+          format: decimal
+        priority:
+          type: string
+          enum: [HIGH, NORMAL, LOW]
+    OrderResponse:
+      type: object
+      required: [orderId, status, amount, createdAt]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [NEW, PROCESSING, PAID, SHIPPED, CANCELLED]
+        amount:
+          type: number
+          format: decimal
+        createdAt:
+          type: string
+          format: date-time

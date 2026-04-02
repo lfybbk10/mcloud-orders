@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: mcloud-orders
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      orders-events: orders.events
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+  liquibase:
+    change-log: classpath:liquibase/changelog-master.yml
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  health:
+    probes:
+      enabled: true
