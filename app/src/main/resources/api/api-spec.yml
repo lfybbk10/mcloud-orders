@@ -1,14 +1,15 @@
 openapi: 3.0.3
 info:
-  title: mcloud-orders Order API
-  version: 0.1.0
+  title: mcloud-orders Order Producer API
+  version: 0.2.0
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8081
 paths:
   /api/v1/orders:
     post:
-      summary: Создать заказ и отправить событие в Kafka
-      operationId: createOrder
+      summary: Принять заказ и отправить событие в Kafka
+      operationId: submitOrder
+      tags: [Orders]
       requestBody:
         required: true
         content:
@@ -17,50 +18,77 @@ paths:
               $ref: '#/components/schemas/OrderRequest'
       responses:
         '202':
-          description: Заказ принят и событие отправлено
+          description: Заказ принят, событие поставлено в очередь
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderResponse'
-  /api/v1/orders/{orderId}:
+                $ref: '#/components/schemas/OrderAcceptedResponse'
+        '400':
+          description: Некорректные данные заказа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Не удалось отправить событие
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/orders/metrics:
     get:
-      summary: Получить состояние заказа
-      operationId: getOrder
-      parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      summary: Показать статистику отправки заказов
+      operationId: getOrderProducerMetrics
+      tags: [Orders]
       responses:
         '200':
-          description: Текущий статус заказа
+          description: Текущие метрики по топикам и статусам
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderResponse'
-        '404':
-          description: Заказ не найден
+                $ref: '#/components/schemas/ProducerMetricsResponse'
+
 components:
   schemas:
     OrderRequest:
       type: object
-      required: [customerId, amount, lines]
+      required:
+        - customerId
+        - region
+        - priority
+        - amount
+        - lines
       properties:
         customerId:
           type: string
           format: uuid
+          description: Идентификатор клиента в m-crm
+        region:
+          type: string
+          description: Код региона (используется как ключ партиции)
+          example: EU
+        priority:
+          type: string
+          enum: [HIGH, NORMAL, LOW]
+          description: Приоритет заказа (определяет топик)
         amount:
           type: number
-          format: decimal
+          format: double
+          minimum: 0.01
+          description: Общая сумма заказа
         lines:
           type: array
+          minItems: 1
           items:
-            $ref: '#/components/schemas/OrderLine'
-    OrderLine:
+            $ref: '#/components/schemas/OrderLineRequest'
+
+    OrderLineRequest:
       type: object
-      required: [productId, quantity, price, priority]
+      required:
+        - productId
+        - quantity
+        - price
       properties:
         productId:
           type: string
@@ -70,23 +98,61 @@ components:
           minimum: 1
         price:
           type: number
-          format: decimal
-        priority:
-          type: string
-          enum: [HIGH, NORMAL, LOW]
-    OrderResponse:
+          format: double
+          minimum: 0
+
+    OrderAcceptedResponse:
       type: object
-      required: [orderId, status, amount, createdAt]
+      required:
+        - orderId
+        - status
+        - dispatchedAt
       properties:
         orderId:
           type: string
           format: uuid
         status:
           type: string
-          enum: [NEW, PROCESSING, PAID, SHIPPED, CANCELLED]
-        amount:
-          type: number
-          format: decimal
-        createdAt:
+          enum: [QUEUED]
+        dispatchedAt:
           type: string
           format: date-time
+
+    ProducerMetricsResponse:
+      type: object
+      required:
+        - totals
+        - topics
+      properties:
+        totals:
+          type: object
+          required: [success, failure]
+          properties:
+            success:
+              type: integer
+              minimum: 0
+            failure:
+              type: integer
+              minimum: 0
+        topics:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              success:
+                type: integer
+              failure:
+                type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: ORDER_VALIDATION_FAILED
+        message:
+          type: string
+          example: "Поле amount должно быть больше нуля"
