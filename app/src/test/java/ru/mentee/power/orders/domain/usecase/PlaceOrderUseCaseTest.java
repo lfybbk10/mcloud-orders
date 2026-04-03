@@ -10,7 +10,6 @@ import ru.mentee.power.orders.adapters.web.mapper.OrderEventMapper;
 import ru.mentee.power.orders.command.OrderLineCommand;
 import ru.mentee.power.orders.command.PlaceOrderCommand;
 import ru.mentee.power.orders.domain.model.OrderPriority;
-import ru.mentee.power.orders.model.OrderLine;
 import ru.mentee.power.orders.ports.outgoing.OrderEventPort;
 
 import java.math.BigDecimal;
