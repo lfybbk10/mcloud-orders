@@ -1,240 +1,233 @@
 # mcloud-orders
 
-Практическое задание по настройке Kafka-окружения и проектированию
-топиков для микросервисной системы обработки заказов.
+Учебный сервис заказов на Spring Boot + Kafka. Приложение принимает заказ по HTTP, публикует `OrderPlacedEvent` в Kafka, затем consumer читает событие из одного из трёх priority-топиков и сохраняет заказ в PostgreSQL.
+
+## Что реализовано
+
+- producer API `POST /api/v1/orders`
+- Kafka listener `OrderEventListener` на топиках:
+  - `orders.priority.high`
+  - `orders.priority.normal`
+  - `orders.priority.low`
+- ручной ack через `AckMode.MANUAL_IMMEDIATE`
+- входной порт `ProcessOrderEventPort`
+- выходной порт `OrderPersistencePort`
+- маппинг JSON -> доменная команда в `OrderEventMapper`
+- валидация обязательных полей `orderId`, `priority`, `region`
+- idempotency по `eventId` и `kafkaOffset`
+- сохранение заказа в PostgreSQL через Spring Data JPA
+- consumer-метрики по приоритетам и регионам
+- endpoint метрик чтения: `GET /api/v1/orders/consumers/metrics`
+
+## Стек
+
+- Java 21
+- Spring Boot 3
+- Spring Kafka
+- PostgreSQL
+- Liquibase
+- AKHQ
+- Docker Compose
+
+## Топики
+
+- `orders.priority.high`
+- `orders.priority.normal`
+- `orders.priority.low`
+
+Каждый топик создаётся с `3` partition. Consumer listener запускается с `concurrency = 3`, поэтому group может читать partitions параллельно.
+
+## Локальный запуск
+
+### 1. Поднять инфраструктуру
+
+```powershell
+docker compose up -d
+```
+
+Будут доступны:
+
+- Kafka: `localhost:9092`
+- PostgreSQL: `localhost:5434`
+- AKHQ: `http://localhost:8080/ui/`
+
+Если хочешь переопределить cluster id Kafka, можно задать переменную окружения `KAFKA_CLUSTER_ID`, но для локального старта в `docker-compose.yml` уже есть дефолтное значение.
+
+### 2. Запустить приложение
+
+```powershell
+gradlew.bat :app:bootRun --args="--spring.profiles.active=local"
+```
+
+### 3. Прогнать тесты
+
+```powershell
+./gradlew test
+```
+
+## Проверка отправки заказа
+
+Пример запроса:
+
+```powershell
+$body = @{
+  customerId = [guid]::NewGuid().ToString()
+  region = 'EU'
+  priority = 'HIGH'
+  amount = 123.45
+  lines = @(
+    @{
+      productId = [guid]::NewGuid().ToString()
+      quantity = 2
+      price = 61.73
+    }
+  )
+} | ConvertTo-Json -Depth 5
 
-------------------------------------------------------------------------
+Invoke-RestMethod `
+  -Method Post `
+  -Uri 'http://localhost:8081/api/v1/orders' `
+  -ContentType 'application/json' `
+  -Body $body
+```
 
-# Архитектура окружения
+Пример ответа:
 
-Окружение поднимается через Docker Compose и включает:
+```json
+{
+  "orderId": "315113dd-bee5-4e0e-9344-a941fa047223",
+  "status": "QUEUED",
+  "dispatchedAt": "2026-04-08T18:24:13.7942956+03:00"
+}
+```
 
--   **Kafka (KRaft mode)** --- брокер сообщений
--   **AKHQ** --- web UI для управления Kafka
--   **PostgreSQL** --- база данных для будущих сервисов
+## Проверка чтения
 
-Kafka используется как **event streaming платформа** для обмена
-событиями между сервисами системы заказов.
+### 1. Проверить consumer-метрики
 
-------------------------------------------------------------------------
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:8081/api/v1/orders/consumers/metrics'
+```
 
-# Запуск окружения
+Пример ответа после одного успешно обработанного события:
 
-## 1. Сгенерировать `CLUSTER_ID`
+```json
+{
+  "totals": {
+    "processed": 1,
+    "rejected": 0
+  },
+  "priorities": {
+    "HIGH": 1
+  },
+  "regions": {
+    "EU": 1
+  }
+}
+```
 
-Kafka в режиме **KRaft** требует уникальный идентификатор кластера.
+### 2. Проверить запись в PostgreSQL
 
-Сгенерировать его можно командой:
+Подключение к БД:
 
-docker run --rm confluentinc/cp-kafka:7.7.1 kafka-storage random-uuid
+```powershell
+docker exec -it mcloud-orders-postgres-1 psql -U orders -d orders
+```
 
-Полученный UUID необходимо сохранить в `.env`.
+Полезные запросы:
 
-------------------------------------------------------------------------
+```sql
+select order_id, event_id, kafka_offset, region, amount, priority, status
+from orders
+order by created_at desc
+limit 10;
+```
 
-## 2. Создать `.env`
+```sql
+select count(*) from orders;
+```
 
-Файл `.env` (не коммитится в репозиторий):
+Пример строки после обработки события:
 
-CLUSTER_ID=`<generated_uuid>`{=html}
+```text
+315113dd-bee5-4e0e-9344-a941fa047223|6240e912-942d-404b-949a-4390921bdc24|orders.priority.high:0:15|EU|123.45|HIGH|NEW
+```
 
-------------------------------------------------------------------------
+### 3. Проверить lag и consumer group в Kafka
 
-## 3. Запустить окружение
+```powershell
+docker exec mcloud-orders-kafka-1 kafka-consumer-groups `
+  --bootstrap-server localhost:9092 `
+  --describe `
+  --group orders-processor-group
+```
 
-docker-compose up -d
+В рабочем состоянии у group должен быть:
 
-После запуска должны быть доступны:
+- `LAG = 0`
+- назначенные partitions
+- активные `CONSUMER-ID`
 
-  сервис       адрес
-  ------------ -----------------------
-  Kafka        localhost:9092
-  AKHQ         http://localhost:8080
-  PostgreSQL   localhost:5432
+### 4. Проверить AKHQ
 
-------------------------------------------------------------------------
+AKHQ доступен по адресу:
 
-# Создание топиков
+```text
+http://localhost:8080/ui/
+```
 
-Топики создаются через **AKHQ UI**.
+Что нужно увидеть:
 
-### 1. order-events
+- у топиков `orders.priority.*` есть consumer group `orders-processor-group`
+- lag равен `0`
+- на странице группы видны активные members и назначенные partitions
 
-partitions: 10
+Скриншот списка топиков с `lag = 0`:
 
-Причина:
+![AKHQ topics lag zero](docs/images/akhq-home.png)
 
--   поток заказов самый высокий
--   большое количество producer'ов
--   требуется высокий throughput
+Скриншот consumer group с активными members:
 
-Большое количество partition позволяет масштабировать consumers.
+![AKHQ consumer group members](docs/images/akhq-group-members.png)
 
-------------------------------------------------------------------------
+## Конфигурация consumer'а
 
-### 2. payment-events
+В `application-local.yml` настроено:
 
-partitions: 5
+- `group-id: orders-processor-group`
+- `StringDeserializer` для key/value
+- `enable-auto-commit: false`
+- `ack-mode: manual_immediate`
+- `max-poll-records: 5`
+- `max.poll.interval.ms: 120000`
 
-Причина:
+## Что сохраняется в БД
 
--   финансовые события требуют надежности
--   нагрузка ниже, чем у заказов
--   меньшее количество partition упрощает обработку и контроль порядка
+После обработки события создаётся запись заказа с полями:
 
-------------------------------------------------------------------------
+- `order_id`
+- `event_id`
+- `kafka_offset`
+- `region`
+- `amount`
+- `priority`
+- `status`
+- `created_at`
 
-### 3. inventory-events
+Идемпотентность обеспечивается проверкой:
 
-partitions: 3
+- по `event_id`
+- по `kafka_offset`
 
-Причина:
+## Тесты
 
--   обновления склада происходят реже
--   небольшой throughput
--   меньшее количество partition достаточно для обработки
+В проекте есть:
 
-------------------------------------------------------------------------
+- unit-тест доменного сервиса `OrderConsumerUseCase`
+- интеграционный тест listener'а с `@SpringBootTest` и `EmbeddedKafka`
 
-# Тестовые сообщения
+Запуск:
 
-В каждый топик отправлено одно тестовое сообщение через AKHQ.
-
-## order-events
-
-{ "orderId": "550e8400-e29b-41d4-a716-446655440000", "userId":
-"user-123", "amount": 5999.99, "status": "NEW", "items": \[ {
-"productId": "prod-1", "quantity": 2, "price": 2999.99 } \] }
-
-------------------------------------------------------------------------
-
-## payment-events
-
-{ "paymentId": "pay-001", "orderId":
-"550e8400-e29b-41d4-a716-446655440000", "amount": 5999.99, "status":
-"PENDING", "method": "CARD" }
-
-------------------------------------------------------------------------
-
-## inventory-events
-
-{ "eventId": "inv-001", "orderId":
-"550e8400-e29b-41d4-a716-446655440000", "productId": "prod-1",
-"quantity": -2, "operation": "RESERVE" }
-
-------------------------------------------------------------------------
-
-# Будущие producers
-
-### Order Service
-
-Отправляет события:
-
-order-events
-
-События:
-
--   order_created
--   order_updated
--   order_cancelled
-
-------------------------------------------------------------------------
-
-### Payment Service
-
-Отправляет события:
-
-payment-events
-
-События:
-
--   payment_pending
--   payment_success
--   payment_failed
-
-------------------------------------------------------------------------
-
-### Inventory Service
-
-Отправляет события:
-
-inventory-events
-
-События:
-
--   reserve_items
--   release_items
--   restock_items
-
-------------------------------------------------------------------------
-
-# Будущие consumers
-
-### Payment Processor
-
-Читает:
-
-order-events
-
-Создаёт платеж.
-
-------------------------------------------------------------------------
-
-### Inventory Processor
-
-Читает:
-
-order-events
-
-Резервирует товары.
-
-------------------------------------------------------------------------
-
-### Notification Service
-
-Читает:
-
-order-events payment-events
-
-Отправляет уведомления пользователю.
-
-------------------------------------------------------------------------
-
-### Analytics Service
-
-Читает:
-
-order-events payment-events inventory-events
-
-Используется для аналитики.
-
-------------------------------------------------------------------------
-
-# Масштабирование
-
-Количество partition выбрано исходя из предполагаемой нагрузки:
-
-  topic              partitions   причина
-  ------------------ ------------ ----------------------------
-  order-events       10           высокий throughput заказов
-  payment-events     5            средняя нагрузка
-  inventory-events   3            редкие события
-
-Максимальный параллелизм consumer-групп равен количеству partition.
-
-------------------------------------------------------------------------
-
-# Инструменты
-
--   Kafka
--   AKHQ
--   Docker
--   Docker Compose
--   Gradle
-
-------------------------------------------------------------------------
-
-# Примечания
-
--   `.env` файл не должен коммититься в репозиторий
--   для работы Kafka используется режим **KRaft (без ZooKeeper)**
+```powershell
+./gradlew test
+```

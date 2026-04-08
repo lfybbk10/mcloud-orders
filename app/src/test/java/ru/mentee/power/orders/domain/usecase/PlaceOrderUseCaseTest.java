@@ -6,7 +6,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import ru.mentee.power.orders.adapters.kafka.message.OrderPlacedEvent;
-import ru.mentee.power.orders.adapters.web.mapper.OrderEventMapper;
+import ru.mentee.power.orders.adapters.web.mapper.OrderPublishEventMapper;
 import ru.mentee.power.orders.command.OrderLineCommand;
 import ru.mentee.power.orders.command.PlaceOrderCommand;
 import ru.mentee.power.orders.domain.model.OrderPriority;
@@ -17,8 +17,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,7 +29,7 @@ class PlaceOrderUseCaseTest {
     private OrderEventPort orderEventPort;
 
     @Mock
-    private OrderEventMapper orderEventMapper;
+    private OrderPublishEventMapper orderPublishEventMapper;
 
     @InjectMocks
     private PlaceOrderUseCase placeOrderUseCase;
@@ -45,12 +46,22 @@ class PlaceOrderUseCaseTest {
                 Instant.now()
         );
 
-        var event = new OrderPlacedEvent();
+        when(orderPublishEventMapper.toOrderPlacedEvent(any(PlaceOrderCommand.class), any(UUID.class), any(UUID.class)))
+                .thenAnswer(invocation -> new OrderPlacedEvent(
+                        invocation.getArgument(1, UUID.class),
+                        invocation.getArgument(2, UUID.class),
+                        command.customerId(),
+                        command.region(),
+                        command.amount(),
+                        command.priority(),
+                        List.of(),
+                        command.requestedAt()
+                ));
 
-        when(orderEventMapper.toOrderPlacedEvent(any())).thenReturn(event);
+        UUID result = placeOrderUseCase.placeOrder(command);
 
-        placeOrderUseCase.placeOrder(command);
-
-        verify(orderEventPort).publish(event);
+        var eventCaptor = forClass(OrderPlacedEvent.class);
+        verify(orderEventPort).publish(eventCaptor.capture());
+        assertEquals(result, eventCaptor.getValue().orderId());
     }
 }

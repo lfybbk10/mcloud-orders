@@ -12,7 +12,6 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import ru.mentee.power.orders.adapters.kafka.message.OrderPlacedEvent;
 
@@ -40,38 +39,25 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, OrderPlacedEvent> orderPlacedConsumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, String> orderPlacedConsumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
-
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "orders-processor-group");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        JsonDeserializer<OrderPlacedEvent> jsonDeserializer =
-                new JsonDeserializer<>(OrderPlacedEvent.class);
-
-        jsonDeserializer.addTrustedPackages("ru.mentee.power.orders.adapters.kafka.message");
-        jsonDeserializer.setUseTypeHeaders(false);
 
         return new DefaultKafkaConsumerFactory<>(
                 props,
                 new StringDeserializer(),
-                jsonDeserializer
+                new StringDeserializer()
         );
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, OrderPlacedEvent> orderListenerFactory(
-            ConsumerFactory<String, OrderPlacedEvent> orderPlacedConsumerFactory
+    public ConcurrentKafkaListenerContainerFactory<String, String> orderListenerFactory(
+            ConsumerFactory<String, String> orderPlacedConsumerFactory
     ) {
-        ConcurrentKafkaListenerContainerFactory<String, OrderPlacedEvent> factory =
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(orderPlacedConsumerFactory);
-
-        // чтобы работал Acknowledgment ack
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
-
-        // если захочешь параллельную обработку
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         factory.setConcurrency(3);
 
         return factory;

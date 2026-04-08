@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     boolean existsByEventId(UUID eventId);
+    boolean existsByKafkaOffset(String kafkaOffset);
+    java.util.Optional<Order> findByEventId(UUID eventId);
 }

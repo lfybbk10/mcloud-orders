@@ -7,3 +7,7 @@ databaseChangeLog:
       file: liquibase/changesets/20260407-rename-column-status-in-orders-table.sql
   - include:
       file: liquibase/changesets/20260407-add-column-priority-in-orders-table.sql
+  - include:
+      file: liquibase/changesets/20260408-align-orders-table-schema.sql
+  - include:
+      file: liquibase/changesets/20260408-fix-orders-table-schema.sql

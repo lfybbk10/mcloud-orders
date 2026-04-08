@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record OrderPlacedEvent(
+        UUID orderId,
         UUID eventId,
         UUID customerId,
         String region,
@@ -18,7 +19,7 @@ public record OrderPlacedEvent(
 ) {
 
     public OrderPlacedEvent(){
-        this(UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null);
+        this(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null);
     }
 }
 

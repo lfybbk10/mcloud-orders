@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public interface OrderPersistencePort {
     boolean existsByEventId(UUID eventId);
+    boolean existsByKafkaOffset(String kafkaOffset);
 
     void save(ProcessOrderCommand orderCommand);
 }

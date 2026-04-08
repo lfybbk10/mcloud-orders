@@ -21,9 +21,13 @@ public class OrderPersistenceAdapter implements OrderPersistencePort {
     }
 
     @Override
+    public boolean existsByKafkaOffset(String kafkaOffset) {
+        return repository.existsByKafkaOffset(kafkaOffset);
+    }
+
+    @Override
     public void save(ProcessOrderCommand orderCommand) {
         Order order = mapper.toOrder(orderCommand);
-        System.out.println("amount: "+order.getAmount());
         repository.save(order);
     }
 }

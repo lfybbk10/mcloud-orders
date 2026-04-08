@@ -7,6 +7,17 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
+    consumer:
+      group-id: orders-processor-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      max-poll-records: 5
+      properties:
+        max.poll.interval.ms: 120000
+    listener:
+      ack-mode: manual_immediate
 
 server:
   port: 8081
