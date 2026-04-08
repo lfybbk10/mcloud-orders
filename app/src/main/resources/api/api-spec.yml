@@ -49,6 +49,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProducerMetricsResponse'
 
+  /api/v1/orders/consumers/metrics:
+    get:
+      summary: Показать статистику чтения заказов
+      operationId: getOrderConsumerMetrics
+      tags: [Orders]
+      responses:
+        '200':
+          description: Текущие метрики consumer'а по приоритетам и регионам
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumerMetricsResponse'
+
 components:
   schemas:
     OrderRequest:
@@ -143,6 +156,34 @@ components:
                 type: integer
               failure:
                 type: integer
+
+    ConsumerMetricsResponse:
+      type: object
+      required:
+        - totals
+        - priorities
+        - regions
+      properties:
+        totals:
+          type: object
+          required: [processed, rejected]
+          properties:
+            processed:
+              type: integer
+              minimum: 0
+            rejected:
+              type: integer
+              minimum: 0
+        priorities:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        regions:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
 
     ErrorResponse:
       type: object

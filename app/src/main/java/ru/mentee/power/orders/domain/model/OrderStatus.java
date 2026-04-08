@@ -1,4 +1,5 @@
 package ru.mentee.power.orders.domain.model;
 
-public class OrderStatus {
+public enum OrderStatus {
+    NEW
 }
