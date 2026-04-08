@@ -8,6 +8,8 @@ import ru.mentee.power.orders.command.PlaceOrderCommand;
 import ru.mentee.power.orders.ports.incoming.PlaceOrderPort;
 import ru.mentee.power.orders.ports.outgoing.OrderEventPort;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class PlaceOrderUseCase implements PlaceOrderPort {
@@ -16,7 +18,7 @@ public class PlaceOrderUseCase implements PlaceOrderPort {
 
     @Override
     public void placeOrder(PlaceOrderCommand command) {
-        OrderPlacedEvent event = orderEventMapper.toOrderPlacedEvent(command);
+        OrderPlacedEvent event = orderEventMapper.toOrderPlacedEvent(command, UUID.randomUUID());
         orderEventPort.publish(event);
     }
 }

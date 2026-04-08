@@ -1,3 +1,9 @@
 databaseChangeLog:
   - include:
       file: liquibase/changesets/20260401-create-orders-table.sql
+  - include:
+      file: liquibase/changesets/20260407-add-column-eventid-to-orders-table.sql
+  - include:
+      file: liquibase/changesets/20260407-rename-column-status-in-orders-table.sql
+  - include:
+      file: liquibase/changesets/20260407-add-column-priority-in-orders-table.sql

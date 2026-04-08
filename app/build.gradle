@@ -44,9 +44,6 @@ dependencies {
 
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
-    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
-    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
-
     // OpenAPI
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-api:2.4.0"
 
@@ -54,14 +51,20 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
+    implementation "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
+
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
 
     testRuntimeOnly 'com.h2database:h2:2.3.232'
 
     // Mockito для тестов
     testImplementation 'org.mockito:mockito-core:5.21.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

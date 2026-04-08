@@ -1,4 +1,4 @@
-package ru.mentee.power.orders.adapters.kafka.message;
+package ru.mentee.power.orders.command;
 
 import ru.mentee.power.orders.domain.model.OrderPriority;
 
@@ -7,18 +7,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-public record OrderPlacedEvent(
+public record ProcessOrderCommand(
         UUID eventId,
         UUID customerId,
         String region,
         BigDecimal amount,
         OrderPriority priority,
-        List<OrderPlacedLine> lines,
-        Instant emittedAt
+        List<OrderLineCommand> lines,
+        Instant createdAt
 ) {
 
-    public OrderPlacedEvent(){
-        this(UUID.randomUUID(), UUID.randomUUID(), null, null, null, null, null);
-    }
 }
-
